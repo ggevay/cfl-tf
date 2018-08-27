@@ -47,6 +47,7 @@ FLAGS = None
 def main(_):
   loopmaster_host = [FLAGS.loopmaster_host]
   worker_hosts = FLAGS.worker_hosts.split(",")
+  num_hosts = len(worker_hosts)
 
   #print(loopmaster_host)
   #print(worker_hosts)
@@ -64,24 +65,29 @@ def main(_):
 
   if FLAGS.job_name == "loopmaster":
 
-    def cond(i, coll0, coll1):
+    def cond(i, *colls):
       return tf.less(i, 10)
 
-    def body(i, coll0, coll1):
-      with tf.device("/job:worker/task:0"):
-      #with tf.device("/job:loopmaster/task:0"):
-        coll0_mapped = tf.add(coll0, 1)
-      with tf.device("/job:worker/task:1"):
-      #with tf.device("/job:loopmaster/task:0"):
-        coll1_mapped = tf.add(coll1, 1)
-      return (tf.add(i, 1), coll0_mapped, coll1_mapped)
+    def body(i, *colls):
+      t = 0
+      coll_mapped = []
+      for coll in colls:
+        with tf.device("/job:worker/task:%d" % t):
+        #with tf.device("/job:loopmaster/task:0"):
+          coll_mapped.append(tf.add(coll, 1))
+      return tuple([tf.add(i, 1)] + coll_mapped)
 
     with tf.device("/job:loopmaster/task:0"):
       i = tf.constant(0)
-      coll0_init = tf.constant([1,2])
-      coll1_init = tf.constant([24,25])
-      (i_res, coll0_res, coll1_res) = tf.while_loop(cond, body, [i, coll0_init, coll1_init])
-      conc = tf.concat([coll0_res, coll1_res], 0)
+      # coll0_init = tf.constant([1,2])
+      # coll1_init = tf.constant([24,25])
+      coll_init = []
+      for j in range(0,num_hosts):
+        coll_init.append(tf.constant([j]))
+      res = tf.while_loop(cond, body, [i] + coll_init)
+      i_res = res[0]
+      colls_res = res[1:num_hosts+1]
+      conc = tf.concat(colls_res, 0)
 
     sess = tf.Session(server.target) # !
     print(sess.run(conc))
@@ -92,8 +98,6 @@ def main(_):
 
   writer = tf.summary.FileWriter('.')
   writer.add_graph(tf.get_default_graph())
-
-  print("alma")
 
 
 if __name__ == "__main__":
