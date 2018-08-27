@@ -1,0 +1,16 @@
+python cfmicrobench.py \
+     --loopmaster_host=localhost:2222 \
+     --worker_hosts=localhost:2223,localhost:2224 \
+     --job_name=loopmaster --task_index=0
+
+
+python cfmicrobench.py \
+     --loopmaster_host=localhost:2222 \
+     --worker_hosts=localhost:2223,localhost:2224 \
+     --job_name=worker --task_index=0
+
+
+python cfmicrobench.py \
+     --loopmaster_host=localhost:2222 \
+     --worker_hosts=localhost:2223,localhost:2224 \
+     --job_name=worker --task_index=1
