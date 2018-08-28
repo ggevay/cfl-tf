@@ -1,5 +1,6 @@
 import argparse
 import sys
+import time
 
 import tensorflow as tf
 
@@ -48,6 +49,8 @@ def main(_):
   loopmaster_host = [FLAGS.loopmaster_host]
   worker_hosts = FLAGS.worker_hosts.split(",")
   num_hosts = len(worker_hosts)
+  num_steps = FLAGS.num_steps
+  # intra_node_para = FLAGS.intra_node_para
 
   #print(loopmaster_host)
   #print(worker_hosts)
@@ -66,7 +69,7 @@ def main(_):
   if FLAGS.job_name == "loopmaster":
 
     def cond(i, *colls):
-      return tf.less(i, 10)
+      return tf.less(i, num_steps)
 
     def body(i, *colls):
       t = 0
@@ -79,8 +82,6 @@ def main(_):
 
     with tf.device("/job:loopmaster/task:0"):
       i = tf.constant(0)
-      # coll0_init = tf.constant([1,2])
-      # coll1_init = tf.constant([24,25])
       coll_init = []
       for j in range(0,num_hosts):
         coll_init.append(tf.constant([j]))
@@ -90,7 +91,12 @@ def main(_):
       conc = tf.concat(colls_res, 0)
 
     sess = tf.Session(server.target) # !
+
+    print("Starting time measurement")
+    start_time = time.time()
     print(sess.run(conc))
+    end_time = time.time()
+    print("Elapsed time: " + str(end_time - start_time))
 
   elif FLAGS.job_name == "worker":
     server.join()
@@ -129,5 +135,19 @@ if __name__ == "__main__":
       default=0,
       help="Index of task within the job"
   )
+  # Other opts
+  parser.add_argument(
+      "--num_steps",
+      type=int,
+      default=30,
+      help="Number of iteration steps"
+  )
+  # parser.add_argument(
+  #     "--intra_node_para",
+  #     type=int,
+  #     default=8,
+  #     help="Number of maps in one node"
+  # )
   FLAGS, unparsed = parser.parse_known_args()
+
   tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)
