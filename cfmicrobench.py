@@ -50,7 +50,7 @@ def main(_):
   worker_hosts = FLAGS.worker_hosts.split(",")
   num_hosts = len(worker_hosts)
   num_steps = FLAGS.num_steps
-  # intra_node_para = FLAGS.intra_node_para
+  intra_node_para = FLAGS.intra_node_para
 
   #print(loopmaster_host)
   #print(worker_hosts)
@@ -74,20 +74,22 @@ def main(_):
     def body(i, *colls):
       t = 0
       coll_mapped = []
-      for coll in colls:
+      for j in range(0,num_hosts):
         with tf.device("/job:worker/task:%d" % t):
         #with tf.device("/job:loopmaster/task:0"):
-          coll_mapped.append(tf.add(coll, 1))
+          for k in range(0,intra_node_para):
+            coll=colls[j*intra_node_para+k]
+            coll_mapped.append(tf.add(coll, 1))
       return tuple([tf.add(i, 1)] + coll_mapped)
 
     with tf.device("/job:loopmaster/task:0"):
       i = tf.constant(0)
       coll_init = []
-      for j in range(0,num_hosts):
+      for j in range(0,num_hosts*intra_node_para):
         coll_init.append(tf.constant([j]))
       res = tf.while_loop(cond, body, [i] + coll_init)
       i_res = res[0]
-      colls_res = res[1:num_hosts+1]
+      colls_res = res[1:]
       conc = tf.concat(colls_res, 0)
 
     sess = tf.Session(server.target) # !
@@ -102,7 +104,7 @@ def main(_):
     server.join()
 
 
-  writer = tf.summary.FileWriter('.')
+  writer = tf.summary.FileWriter('./TF_logs/.')
   writer.add_graph(tf.get_default_graph())
 
 
@@ -142,12 +144,12 @@ if __name__ == "__main__":
       default=30,
       help="Number of iteration steps"
   )
-  # parser.add_argument(
-  #     "--intra_node_para",
-  #     type=int,
-  #     default=8,
-  #     help="Number of maps in one node"
-  # )
+  parser.add_argument(
+      "--intra_node_para",
+      type=int,
+      default=8,
+      help="Number of maps in one node"
+  )
   FLAGS, unparsed = parser.parse_known_args()
 
   tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)
